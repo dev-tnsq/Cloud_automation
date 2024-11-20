@@ -1,5 +1,4 @@
 from google.oauth2 import service_account
-from google.cloud import compute_v1
 
 def get_gcp_credentials(service_account_key_path):
     """Create credentials from service account key file."""

@@ -1,7 +1,5 @@
 from google.cloud import compute_v1
 from ._base import GCPResourceCleanup
-from .utils import is_resource_old_enough
-
 class SSHKeyCleanup(GCPResourceCleanup):
     def cleanup(self):
         client = compute_v1.ProjectsClient()

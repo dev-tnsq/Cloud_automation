@@ -1,3 +1,6 @@
-.env 
 # path env python 
 path
+# add pycache for all files
+__pycache__
+#env 
+.env

@@ -8,8 +8,10 @@ azure-core>=1.26.4
 google-cloud-storage>=2.10.0
 google-auth>=2.22.0
 google-api-python-client>=2.0.0
+google-cloud-compute>=1.22.0
 
 # Common Dependencies
 python-dotenv>=1.0.0
 requests>=2.31.0
 logging>=0.4.9
+pytz>=2021.3

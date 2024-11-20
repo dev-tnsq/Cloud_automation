@@ -1,5 +1,3 @@
-from google.oauth2 import service_account
-
 class GCPResourceCleanup:
     def __init__(self, project_id, zone=None):
         self.project_id = project_id
