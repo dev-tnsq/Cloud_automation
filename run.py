@@ -2,9 +2,10 @@ import os
 from dotenv import load_dotenv
 import logging
 import argparse
+import json
 
 try:
-    from azu.main import run_cleanup as azure_cleanup
+    from azu.main import AzureCleanupOrchestrator
     from gcp.main import GCPCleanupOrchestrator
 except ImportError as e:
     logging.error(f"Failed to import cleanup modules: {e}")
@@ -18,23 +19,49 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-def run_azure_cleanup():
-    subscription_id = os.getenv('AZURE_SUBSCRIPTION_ID')
-    resource_group = os.getenv('AZURE_RESOURCE_GROUP')
+def load_azure_credentials(file_path):
+    with open(file_path, 'r') as file:
+        return json.load(file)
+
+def load_gcp_credentials(file_path):
+    with open(file_path, 'r') as file:
+        return json.load(file)
+
+def run_azure_cleanup(cleanup_types, hours, disk_hours, azure_credentials):
+    subscription_id = azure_credentials['subscription_id']
+    resource_group = azure_credentials['resource_group']
+    client_id = azure_credentials['client_id']
+    client_secret = azure_credentials['client_secret']
+    tenant_id = azure_credentials['tenant_id']
     
     if not subscription_id:
-        raise ValueError("AZURE_SUBSCRIPTION_ID environment variable is required")
+        raise ValueError("AZURE_SUBSCRIPTION_ID is required in the credentials file")
     
     logger.info("Starting Azure cleanup...")
-    azure_cleanup(subscription_id, resource_group)
-    logger.info("Azure cleanup completed")
+    orchestrator = AzureCleanupOrchestrator(
+        subscription_id=subscription_id,
+        resource_group=resource_group,
+        client_id=client_id,
+        client_secret=client_secret,
+        tenant_id=tenant_id,
+        hours=hours,
+        disk_hours=disk_hours
+    )
+    
+    success = orchestrator.run_all_cleanups(cleanup_types=cleanup_types)
+    
+    if success:
+        logger.info("Azure cleanup completed successfully")
+    else:
+        logger.warning("Azure cleanup completed with some errors")
 
 def run_gcp_cleanup(cleanup_types, hours, disk_hours):
-    project_id = os.getenv('GCP_PROJECT_ID')
-    service_account_key_path = os.getenv('GCP_SERVICE_ACCOUNT_KEY_PATH')
+    gcp_credentials = load_gcp_credentials(os.getenv('GCP_CREDENTIALS_FILE_PATH'))
+    project_id = gcp_credentials['project_id']
+    service_account_key_path = gcp_credentials['service_account_key_path']
     
     if not project_id:
-        raise ValueError("GCP_PROJECT_ID environment variable is required")
+        raise ValueError("GCP_PROJECT_ID is required in the credentials file")
     
     logger.info("Starting GCP cleanup...")
     orchestrator = GCPCleanupOrchestrator(
@@ -75,7 +102,8 @@ def main():
     try:
         if cloud_providers is None or 'azure' in cloud_providers:
             logger.debug("Running Azure cleanup")
-            run_azure_cleanup()
+            azure_credentials = load_azure_credentials(os.getenv('AZURE_CREDENTIALS_FILE_PATH'))
+            run_azure_cleanup(cleanup_types, hours, disk_hours, azure_credentials)
             
         if cloud_providers is None or 'gcp' in cloud_providers:
             logger.debug("Running GCP cleanup")

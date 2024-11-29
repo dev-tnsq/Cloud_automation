@@ -1,16 +1,17 @@
 from azure.mgmt.compute import ComputeManagementClient
 from azure.core.exceptions import ResourceNotFoundError, AzureError
 from azure.mgmt.compute.models import VirtualMachine
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional, List
 from ._base import AzureResourceCleanup
 import logging
 
 class VMCleanup(AzureResourceCleanup):
-    def __init__(self, subscription_id: str, resource_group: Optional[str] = None):
-        super().__init__(subscription_id, resource_group)
+    def __init__(self, subscription_id: str, resource_group: Optional[str] = None, credentials=None, hours: int = 720):
+        super().__init__(subscription_id, resource_group, credentials, hours)
         self.client = ComputeManagementClient(self.credentials, self.subscription_id)
         self.logger = logging.getLogger(__name__)
+        self.hours = hours
 
     def get_vm_status(self, resource_group: str, vm_name: str) -> Optional[str]:
         try:
@@ -27,6 +28,8 @@ class VMCleanup(AzureResourceCleanup):
             return None
 
     def cleanup(self) -> None:
+        cutoff_time = datetime.now(timezone.utc) - timedelta(hours=self.hours)
+        
         try:
             vms: List[VirtualMachine] = list(
                 self.client.virtual_machines.list(self.resource_group)
@@ -39,7 +42,7 @@ class VMCleanup(AzureResourceCleanup):
                     status = self.get_vm_status(vm.id.split('/')[4], vm.name)
                     
                     if status and status.lower() in ['deallocated', 'stopped']:
-                        if vm.time_created and (datetime.now(timezone.utc) - vm.time_created).days >= 30:
+                        if vm.time_created and vm.time_created < cutoff_time:
                             self.log_deletion("unused VM", vm.name)
                             self.client.virtual_machines.begin_delete(
                                 vm.id.split('/')[4],  # resource group name
