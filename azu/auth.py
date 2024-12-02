@@ -1,4 +1,4 @@
-from azure.identity import ClientSecretCredential
+from azure.identity import ClientSecretCredential, ManagedIdentityCredential
 
-def get_azure_credentials(client_id, client_secret, tenant_id):
-    return ClientSecretCredential(client_id=client_id, client_secret=client_secret, tenant_id=tenant_id)
+def get_azure_credentials(client_id=None):
+    return ManagedIdentityCredential(client_id=client_id)

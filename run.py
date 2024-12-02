@@ -13,7 +13,7 @@ except ImportError as e:
 
 # Setup logging
 logging.basicConfig(
-    level=logging.DEBUG,  # Change this line to set the logging level to DEBUG
+    level=logging.INFO,  # Change this line to set the logging level to INFO
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
@@ -21,7 +21,18 @@ logger = logging.getLogger(__name__)
 
 def load_azure_credentials(file_path):
     with open(file_path, 'r') as file:
-        return json.load(file)
+        data = json.load(file)
+        # Parse all required information from the JSON file
+        subscription_id = data['id'].split('/')[2]
+        resource_group = data['id'].split('/')[4]
+        return {
+            'subscription_id': subscription_id,
+            'resource_group': resource_group,
+            'managed_identity_client_id': data['properties']['clientId'],
+            'tenant_id': data['properties']['tenantId'],
+            'principal_id': data['properties']['principalId'],
+            'location': data['location']
+        }
 
 def load_gcp_credentials(file_path):
     with open(file_path, 'r') as file:
@@ -30,10 +41,8 @@ def load_gcp_credentials(file_path):
 def run_azure_cleanup(cleanup_types, hours, disk_hours, azure_credentials):
     subscription_id = azure_credentials['subscription_id']
     resource_group = azure_credentials['resource_group']
-    client_id = azure_credentials['client_id']
-    client_secret = azure_credentials['client_secret']
-    tenant_id = azure_credentials['tenant_id']
-    
+    managed_identity_client_id = azure_credentials['managed_identity_client_id']
+
     if not subscription_id:
         raise ValueError("AZURE_SUBSCRIPTION_ID is required in the credentials file")
     
@@ -41,9 +50,7 @@ def run_azure_cleanup(cleanup_types, hours, disk_hours, azure_credentials):
     orchestrator = AzureCleanupOrchestrator(
         subscription_id=subscription_id,
         resource_group=resource_group,
-        client_id=client_id,
-        client_secret=client_secret,
-        tenant_id=tenant_id,
+        managed_identity_client_id=managed_identity_client_id,
         hours=hours,
         disk_hours=disk_hours
     )
@@ -101,12 +108,12 @@ def main():
     
     try:
         if cloud_providers is None or 'azure' in cloud_providers:
-            logger.debug("Running Azure cleanup")
-            azure_credentials = load_azure_credentials(os.getenv('AZURE_CREDENTIALS_FILE_PATH'))
+            logger.info("Running Azure cleanup")
+            azure_credentials = load_azure_credentials('./test.json')
             run_azure_cleanup(cleanup_types, hours, disk_hours, azure_credentials)
             
         if cloud_providers is None or 'gcp' in cloud_providers:
-            logger.debug("Running GCP cleanup")
+            logger.info("Running GCP cleanup")
             run_gcp_cleanup(cleanup_types, hours, disk_hours)
     except Exception as e:
         logger.error(f"Error during cleanup: {e}")

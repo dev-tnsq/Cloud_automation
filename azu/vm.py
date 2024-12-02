@@ -7,8 +7,8 @@ from ._base import AzureResourceCleanup
 import logging
 
 class VMCleanup(AzureResourceCleanup):
-    def __init__(self, subscription_id: str, resource_group: Optional[str] = None, credentials=None, hours: int = 720):
-        super().__init__(subscription_id, resource_group, credentials, hours)
+    def __init__(self, subscription_id: str, resource_group: Optional[str] = None, credentials=None, hours: int = 720, managed_identity_client_id=None):
+        super().__init__(subscription_id, resource_group, credentials, hours, managed_identity_client_id=managed_identity_client_id)
         self.client = ComputeManagementClient(self.credentials, self.subscription_id)
         self.logger = logging.getLogger(__name__)
         self.hours = hours
@@ -29,6 +29,7 @@ class VMCleanup(AzureResourceCleanup):
 
     def cleanup(self) -> None:
         cutoff_time = datetime.now(timezone.utc) - timedelta(hours=self.hours)
+        self.logger.info(f"Starting VM cleanup (Cutoff time: {cutoff_time.strftime('%Y-%m-%d %H:%M:%S')} UTC)")
         
         try:
             vms: List[VirtualMachine] = list(
@@ -36,31 +37,36 @@ class VMCleanup(AzureResourceCleanup):
                 if self.resource_group
                 else self.client.virtual_machines.list_all()
             )
+            
+            total_vms = len(vms)
+            eligible_vms = 0
+            deleted_vms = 0
 
             for vm in vms:
                 try:
                     status = self.get_vm_status(vm.id.split('/')[4], vm.name)
                     
                     if status and status.lower() in ['deallocated', 'stopped']:
-                        if vm.time_created and vm.time_created < cutoff_time:
-                            self.log_deletion("unused VM", vm.name)
+                        eligible_vms += 1
+                        if hasattr(vm, 'time_created') and vm.time_created and vm.time_created < cutoff_time:
+                            self.logger.info(f"Deleting VM: {vm.name} ({status}, idle for {(datetime.now(timezone.utc) - vm.time_created).total_seconds() / 3600:.1f} hours)")
                             self.client.virtual_machines.begin_delete(
-                                vm.id.split('/')[4],  # resource group name
+                                vm.id.split('/')[4],
                                 vm.name
                             )
-                except AzureError as e:
-                    self.logger.error(f"Azure error processing VM {vm.name}: {str(e)}")
+                            deleted_vms += 1
+                        else:
+                            self.logger.debug(f"Skipping VM {vm.name}: Not reached cutoff time")
+
                 except Exception as e:
                     self.logger.error(f"Error processing VM {vm.name}: {str(e)}")
 
-        except Exception as e:
-            self.logger.error(f"Error cleaning up VMs: {str(e)}")
+            self.logger.info(f"VM Cleanup Summary:")
+            self.logger.info(f"- Total VMs found: {total_vms}")
+            self.logger.info(f"- Eligible for cleanup (stopped/deallocated): {eligible_vms}")
+            self.logger.info(f"- VMs deleted: {deleted_vms}")
 
-if __name__ == "__main__":
-    # Example usage
-    subscription_id = "your-subscription-id"
-    resource_group = "your-resource-group"
-    vm_cleanup = VMCleanup(subscription_id, resource_group)
-    
-    # Cleanup unused VMs
-    vm_cleanup.cleanup()
+        except Exception as e:
+            self.logger.error(f"Error during VM cleanup: {str(e)}")
+
+
