@@ -10,6 +10,7 @@ from .auth import get_azure_credentials
 from .network import NetworkCleanup
 from .network import NetworkSecurityGroupCleanup
 from .virtualNetwork import VirtualNetworkCleanup
+from .alert import UtilizationAlert
 
 class AzureCleanupOrchestrator:
     def __init__(self, subscription_id, resource_group=None, managed_identity_client_id=None, hours=4, disk_hours=4):
@@ -83,3 +84,26 @@ class AzureCleanupOrchestrator:
                 logging.error(f"- {error}")
             return False
         return True
+
+    def run_utilization_checks(self, cpu_threshold=10.0, disk_threshold=90.0, lookback_hours=24):
+        """
+        Run utilization-based alert checks (CPU, disk space, volume allocation).
+
+        Args:
+            cpu_threshold (float): Alert when average CPU %% is below this value
+            disk_threshold (float): Alert when disk usage %% is above this value
+            lookback_hours (int): Metric lookback window in hours
+
+        Returns:
+            list[Alert]: Alerts raised by the checks
+        """
+        logging.info(f"Running Azure utilization checks (cpu<{cpu_threshold}%, disk>{disk_threshold}%)")
+        checker = UtilizationAlert(
+            subscription_id=self.subscription_id,
+            resource_group=self.resource_group,
+            credentials=self.credentials,
+            cpu_threshold=cpu_threshold,
+            disk_threshold=disk_threshold,
+            lookback_hours=lookback_hours,
+        )
+        return checker.check()

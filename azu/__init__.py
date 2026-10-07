@@ -5,6 +5,7 @@ from .vm import VMCleanup
 from .ssh import SSHCleanup
 from .virtualNetwork import VirtualNetworkCleanup
 from ._base import AzureResourceCleanup
+from .alert import UtilizationAlert
 
 __all__ = [
     "DiskCleanup",
@@ -13,5 +14,6 @@ __all__ = [
     "VMCleanup",
     "SSHCleanup",
     "VirtualNetworkCleanup",
-    "AzureResourceCleanup"
+    "AzureResourceCleanup",
+    "UtilizationAlert"
 ]

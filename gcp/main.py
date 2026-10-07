@@ -5,6 +5,7 @@ from .nic import NICCleanup
 from .network import NetworkEndpointGroupCleanup
 from .ssh import SSHKeyCleanup
 from .auth import get_gcp_credentials
+from .alert import UtilizationAlert
 import logging
 
 class GCPCleanupOrchestrator:
@@ -73,4 +74,26 @@ class GCPCleanupOrchestrator:
                 logging.error(f"- {error}")
             return False
         return True
+
+    def run_utilization_checks(self, cpu_threshold=10.0, disk_threshold=90.0, lookback_hours=24):
+        """
+        Run utilization-based alert checks (CPU, disk space, volume allocation).
+
+        Args:
+            cpu_threshold (float): Alert when average CPU %% is below this value
+            disk_threshold (float): Alert when disk usage %% is above this value
+            lookback_hours (int): Metric lookback window in hours
+
+        Returns:
+            list[Alert]: Alerts raised by the checks
+        """
+        logging.info(f"Running GCP utilization checks (cpu<{cpu_threshold}%, disk>{disk_threshold}%)")
+        checker = UtilizationAlert(
+            project_id=self.project_id,
+            credentials=self.credentials,
+            cpu_threshold=cpu_threshold,
+            disk_threshold=disk_threshold,
+            lookback_hours=lookback_hours,
+        )
+        return checker.check()
 
